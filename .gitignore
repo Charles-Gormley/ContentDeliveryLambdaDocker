@@ -2,7 +2,7 @@
 !jest.config.js
 *.d.ts
 node_modules
-
+*charlie-tokenizedtoast-serviceAccount-GoogleAPI.json
 
 # CDK asset staging directory
 .cdk.staging
