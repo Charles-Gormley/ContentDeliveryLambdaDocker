@@ -32,6 +32,7 @@ RUN gcloud auth activate-service-account --key-file /image/service-account-key.j
 # PALM API load in api key file
 ENV PALM_API_KEY=${PALM_API_KEY}
 ENV OPENAI_API_KEY=${OPENAI_KEY}
+ENV REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN}
 
 
 # AWS CLI Installation
@@ -40,7 +41,7 @@ ENV AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 
 ENV AWS_DEFAULT_REGION=us-east-1
 ENV AWS_DEFAULT_OUTPUT=json
-RUN pip install numpy pandas tqdm joblib boto3 awscli google-cloud-texttospeech google-generativeai openai pydub
+RUN pip install numpy pandas tqdm joblib boto3 awscli google-cloud-texttospeech google-generativeai openai pydub replicate
 
 COPY src/* .
 CMD ["main.handler"]

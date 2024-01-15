@@ -1,6 +1,7 @@
 from google.cloud import texttospeech
 import google.generativeai as palm
 import openai
+import replicate
 import boto3
 from pydub import AudioSegment
 import requests
@@ -20,11 +21,12 @@ logging.basicConfig(level=logging.INFO,
                     datefmt='%Y-%m-%d %H:%M:%S')
 
 # Open AI API 
-s = os.environ.get("OPENAI_KEY")
 openai.api_key = os.environ.get("OPENAI_API_KEY")
+openai_api_key = os.environ.get("OPENAI_API_KEY")
 openai_client = openai.OpenAI()
-print(f"open ai api key: {s}")
 
+# Replicate API 
+replicate_token = os.getenv("REPLICATE_API_TOKEN")
 
 
 # Palm API
@@ -73,6 +75,42 @@ def split_content(content, max_length):
 def count_words(string):
     return len(string.split())
 
+
+def replicate_summarization(content: str, length: int, context: str, prompt: str,  max_retries: int = 3):
+    backoff_factor = 1.05
+    token_buffer = 100
+    model = "mistralai/mixtral-8x7b-instruct-v0.1"
+
+    max_tokens = count_words(context) + count_words(content) + count_words(prompt) + length + token_buffer
+
+    for attempt in range(max_retries):
+        try:
+            start_time = time()
+            response = ''
+
+            for event in replicate.stream(
+                model,
+                input={
+                    "prompt":context + prompt + content,
+                    "top_k": 50,
+                    "top_p": 0.9,
+                    "temperature": 0.6,
+                    "max_new_tokens": length+token_buffer,
+                    "presence_penalty": 0,
+                    "frequency_penalty": 0
+                },
+            ):
+                response += str(event)
+            
+            latency = time() - start_time
+            failure = False
+            return response
+        except Exception as e:
+            logging.warning(f"OpenAIError occurred: {e}, attempt {attempt + 1} of {max_retries}")
+            sleep(int(backoff_factor ** attempt))
+
+        return False
+
 def openai_summarization(content: str, length: int, context: str, prompt: str, summarization_style: str = "Business Casual", max_retries: int = 3):
     backoff_factor = 1.5
     token_buffer = 100
@@ -85,7 +123,7 @@ def openai_summarization(content: str, length: int, context: str, prompt: str, s
     url = "https://api.openai.com/v1/chat/completions"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"  # Replace with your actual API key
+        "Authorization": f"Bearer {openai_api_key}"  # Replace with your actual API key
     }
 
     data = {
@@ -150,10 +188,13 @@ def summarize_content(content:str, length:int, summarization_style:str="Business
     context = f"Give an overview of the following news story or technological breaktrhough. REMEMBER TO BE ENGAGING AND BE A STORYTELLER! \
                 Do not mention that your are writer or that you are summarizing the article just summarize the articles. Summarize the article in {length} words. \
                      Summarize the articles in the following tone: {summarization_style} "
-    prompt = f"Summarize the following articles in a {summarization_style} tone with {length} words: {content}."
+    prompt = f"Summarize the following articles in a {summarization_style} tone with {length} words: {content}: "
     
-    response = openai_summarization(content, length, context, prompt, summarization_style)
-    if not response: 
+    
+    response = replicate_summarization(content, length, context, prompt)
+    if not response:
+        response = openai_summarization(content, length, context, prompt, summarization_style)
+    elif not response: 
         response = palm_summarization(content, length, context, prompt, summarization_style)
     
     return response
@@ -256,66 +297,6 @@ def combine_clips(num_articles, transition_drum):
         combined_podcast += transition_drum
         os.remove(clip_file)
     return combined_podcast
-
-# def generate_podcast(articles:list, target_word_count_per_article:int, user_id:int, s3_filename:str, tone:str="Business Casual"):
-#     article_content_list = get_content(articles)
-#     combined_podcast = None
-#     index = 0
-
-#     titles = 'Today we will be covering. '
-#     for article in article_content_list:
-#         title = article["title"]
-#         titles = titles + title + "."
-    
-#     now = datetime.now()
-
-#     # Mapping integers to weekdays
-#     weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-#     # Mapping integers to month names
-#     months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-
-
-#     generate_podcast_clip(f"Hello! Its {weekdays[now.weekday()]}. {months[now.month - 1]} {now.day}. You're listening to The Toast. Today we're covering: {titles} Let's ride!", 0)
-#     generate_intro("podcast-intro.wav", "/tmp/podcast_clip_0.wav")
-
-#     combined_podcast = AudioSegment.from_wav("/tmp/intro.wav")
-#     transition_drum = AudioSegment.from_wav("drumbit.wav")
-
-#     print(len(article_content_list))
-#     for article_content in article_content_list:
-#         link = article_content["link"]
-#         title = article_content["title"]
-#         content = article_content["content"]
-
-#         summarized_content = summarize_content(content, target_word_count_per_article, tone)
-
-#         podcast_clip_file = generate_podcast_clip(summarized_content, index)
-
-#         clip = AudioSegment.from_wav(podcast_clip_file)
-#         if combined_podcast is None:
-#             combined_podcast = clip
-#         else:
-#             combined_podcast += clip
-#             combined_podcast += transition_drum
-
-#         index += 1
-
-#         os.remove(podcast_clip_file)
-
-#     filename = '/tmp/podcast.wav'
-#     s3_bucket = "user-podcasts"
-    
-
-#     logging.info("Saving Audio to local")
-#     combined_podcast.export(filename, format="wav")
-#     logging.info(f"Combined Audio Saved to {filename}")
-
-#     logging.info(f"Saving podcast to s3 for user: {user_id} ")
-#     s3_client.upload_file(Bucket=s3_bucket, Filename=filename, Key=s3_filename)
-#     logging.info(f"Successfully saved podcast to s3 for user: {user_id}")
-
-#     return s3_filename
     
 def generate_podcast(articles:list, target_word_count_per_article:int, user_id:int, s3_filename:str, tone:str="Business Casual"):
     article_content_list = get_content(articles)
@@ -400,9 +381,12 @@ def handler(event=None, context=None):
     if content_format == "Podcast":
         generate_podcast(articles, int(target_word_count), user_id, s3_filename, tone)
         return {
-                'statusCode': 200,
-                'errorMessage': "Not Valid event type."
+                'statusCode': 200
             }
+    elif content_format == "Healthcheck":
+        return {
+            'statusCode': 200
+        }
         
     else: 
         return {
