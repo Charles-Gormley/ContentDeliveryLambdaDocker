@@ -22,8 +22,6 @@ logging.basicConfig(level=logging.INFO,
 
 # Open AI API 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
-openai_api_key = os.environ.get("OPENAI_API_KEY")
-openai_client = openai.OpenAI()
 
 # Replicate API 
 replicate_token = os.getenv("REPLICATE_API_TOKEN")
@@ -196,6 +194,8 @@ def summarize_content(content:str, length:int, summarization_style:str="Business
         response = openai_summarization(content, length, context, prompt, summarization_style)
     elif not response: 
         response = palm_summarization(content, length, context, prompt, summarization_style)
+
+    logging.info(f"Response Type: {type(response)}")
     
     return response
 
@@ -276,10 +276,11 @@ async def process_all_articles(articles, target_word_count, tone):
     return processed_articles
 
 async def process_article(article_content, target_word_count_per_article, tone, index):
-    logging.info(f"Processing Article: {title}")
+    
     link = article_content["link"]
     title = article_content["title"]
     content = article_content["content"]
+    logging.info(f"Processing Article: {title}")
 
     summarized_content = summarize_content(content, target_word_count_per_article, tone)
     podcast_clip_file = generate_podcast_clip(summarized_content, index)
@@ -304,7 +305,6 @@ def generate_podcast(articles:list, target_word_count_per_article:int, user_id:i
     combined_podcast = None
     index = 0
 
-    print(article_content_list)
     num_articles = len(article_content_list)
     titles = ''
     for i in range(num_articles):
@@ -396,3 +396,27 @@ def handler(event=None, context=None):
             's3Path':"None"
         }
 
+
+if __name__ == "__main__":
+
+    event = {}
+
+    event["articleIdRecommendations"] = [{"topic":"Testing", "articleID":101462124}, {"topic":"Testing", "articleID":101461582}]
+    event["targetWordCount"] = 200
+    event["format"] = "Podcast"
+    event["userId"] = 12345
+    event["tone"] = "Joking"
+    event["s3Path"] = f'{event["userId"]}/{int(time())}-podcast.wav'
+    
+
+    articles = event["articleIdRecommendations"] # Dictionary
+    target_word_count = event["targetWordCount"]
+    content_format = event["format"]
+    user_id = event["userId"]
+    tone = event["tone"]
+    s3_filename = event["s3Path"]
+
+    
+    if content_format == "Podcast":
+        generate_podcast(articles, int(target_word_count), user_id, s3_filename, tone)
+        
