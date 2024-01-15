@@ -268,6 +268,7 @@ def generate_intro(audio_file1, audio_file2):
     return combined_audio
 
 async def process_all_articles(articles, target_word_count, tone):
+    logging.info("Processing Articles Kickoff")
     tasks = [process_article(article, target_word_count, tone, index) for index, article in enumerate(articles)]
     
     processed_articles = await asyncio.gather(*tasks)
@@ -275,7 +276,7 @@ async def process_all_articles(articles, target_word_count, tone):
     return processed_articles
 
 async def process_article(article_content, target_word_count_per_article, tone, index):
-    print(article_content)
+    logging.info(f"Processing Article: {title}")
     link = article_content["link"]
     title = article_content["title"]
     content = article_content["content"]
