@@ -16,12 +16,13 @@ import json
 from datetime import datetime
 
 ################# Config #################
-logging.basicConfig(level=logging.INFO,
-                    format='[%(asctime)s] [%(processName)s] [%(levelname)s] - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S')
 
-# Open AI API 
+
+# Open AI API
+print("Outputting API Keys: ") 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
+openai_api_key = os.environ.get("OPENAI_API_KEY")
+
 
 # Replicate API 
 replicate_token = os.getenv("REPLICATE_API_TOKEN")
@@ -104,7 +105,7 @@ def replicate_summarization(content: str, length: int, context: str, prompt: str
             failure = False
             return response
         except Exception as e:
-            logging.warning(f"OpenAIError occurred: {e}, attempt {attempt + 1} of {max_retries}")
+            logging.warning(f"Replicate error occurred: {e}, attempt {attempt + 1} of {max_retries}")
             sleep(int(backoff_factor ** attempt))
 
         return False
@@ -353,6 +354,10 @@ def generate_podcast(articles:list, target_word_count_per_article:int, user_id:i
     return s3_filename
 
 def handler(event=None, context=None):
+
+    logging.basicConfig(level=logging.INFO,
+                    format='[%(asctime)s] [%(processName)s] [%(levelname)s] - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S')
     print("Event:", event)
     if event == {}:
         event = {}
@@ -362,7 +367,7 @@ def handler(event=None, context=None):
         event["format"] = "Podcast"
         event["userId"] = 12345
         event["tone"] = "Joking"
-        event["s3Path"] = f'{user_id}/{int(time())}-podcast.wav'
+        event["s3Path"] = f'{event["userId"]}/{int(time())}-podcast.wav'
 
     try:
         articles = event["articleIdRecommendations"] # Dictionary

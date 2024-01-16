@@ -17,7 +17,7 @@ The `cdk.json` file tells the CDK Toolkit how to execute your app.
 cd into image directory
 1. docker build -t docker-image:test .
 2. Set AWS Access Keys & AWS Secret IDs to your env variables.
-3. docker run -p 9000:8080 -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} -e PALM_API_KEY=${PALM_API_KEY} -e OPENAI_API_KEY=${OPENAI_KEY} -e REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN} docker-image:test
+3. docker run -p 9000:8080 -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} -e PALM_API_KEY=${PALM_API_KEY} -e OPENAI_API_KEY=${OPENAI_API_KEY} -e REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN} docker-image:test
 4. (open seperate window)
 5. curl -vvv -H "Content-Type: application/json" -d "{}" http://localhost:9000/2015-03-31/functions/function/invocations
 
