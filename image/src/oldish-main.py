@@ -9,7 +9,6 @@ import requests
 
 import shutil
 import re
-import base64
 import asyncio
 import aiohttp
 from time import time, sleep 
@@ -23,7 +22,6 @@ logging.basicConfig(level=logging.INFO,
                     format='[%(asctime)s] [%(processName)s] [%(levelname)s] - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S')
 logging.info("Starting Script")
-start_time = time()
 
 
 logging.info("Loading in Environment Variables")
@@ -49,9 +47,9 @@ defaults = {
 logging.info("Done Configuring Palm Package")
 
 # TTS Model
-# logging.info("Configure tts package")
-# speech_client = texttospeech.TextToSpeechClient()
-# logging.info("Done Configuring tts package")
+logging.info("Configure tts package")
+speech_client = texttospeech.TextToSpeechClient()
+logging.info("Done Configuring tts package")
 
 # S3
 logging.info("Connecting to s3")
@@ -230,57 +228,26 @@ async def summarize_content(content: str, length: int, summarization_style: str 
 
 
 
-# def synthesize_speech_sync(speech_client, synthesis_input, voice, audio_config, index):
-#     response = speech_client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
-#     temp_filename = f'/tmp/podcast_clip_{index}.wav'
-#     with open(temp_filename, "wb") as temp_file:
-#         temp_file.write(response.audio_content)
-#     return temp_filename
+def synthesize_speech_sync(speech_client, synthesis_input, voice, audio_config, index):
+    response = speech_client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
+    temp_filename = f'/tmp/podcast_clip_{index}.wav'
+    with open(temp_filename, "wb") as temp_file:
+        temp_file.write(response.audio_content)
+    return temp_filename
 
 # Asynchronous wrapper function
-async def generate_podcast_clip(podcast_str, index):
-    # Prepare the request payload
-    data = {
-        "input": {
-            "text": podcast_str
-        },
-        "voice": {
-            "languageCode": "en-US",
-            "name": "en-US-Neural2-I",
-            "ssmlGender": "MALE"
-        },
-        "audioConfig": {
-            "audioEncoding": "LINEAR16"
-        }
-    }
+async def generate_podcast_clip(speech_client, podcast_str, index):
+    synthesis_input = texttospeech.SynthesisInput(text=podcast_str)
+    voice = texttospeech.VoiceSelectionParams(language_code="en-US", name="en-US-Neural2-I", ssml_gender=texttospeech.SsmlVoiceGender.MALE)
+    audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.LINEAR16)
 
-    # Set up the headers with the authorization token
-    headers = {
-        "Authorization": "Bearer " + google_access_token,
-        "Content-Type": "application/json; charset=utf-8",
-        "x-goog-user-project": google_project
-    }
+    loop = asyncio.get_event_loop()
+    with ThreadPoolExecutor() as pool:
+        return await loop.run_in_executor(pool, synthesize_speech_sync, speech_client, synthesis_input, voice, audio_config, index)
 
-    # API endpoint
-    tts_url = "https://texttospeech.googleapis.com/v1/text:synthesize"
-
-    # Send the POST request asynchronously
-    async with aiohttp.ClientSession() as session:
-        async with session.post(tts_url, headers=headers, json=data) as response:
-            if response.status == 200:
-                temp_filename = f'/tmp/podcast_clip_{index}.wav'
-                response_data = await response.json()
-                audio_content = base64.b64decode(response_data['audioContent'])
-                with open(temp_filename, "wb") as out:
-                    out.write(audio_content)
-                return temp_filename
-            else:
-                print("Error:", response.status, response.text())
-                return None
-
-async def process_podcasts(texts):
+async def process_podcasts(speech_client, texts):
     
-    tasks = [generate_podcast_clip(text, index) for index, text in enumerate(texts)]
+    tasks = [generate_podcast_clip(speech_client, text, index) for index, text in enumerate(texts)]
     return await asyncio.gather(*tasks)
 
 
@@ -361,19 +328,20 @@ async def generate_podcast(articles: list, target_word_count_per_article: int, u
 
     # Collect texts for TTS
     summarization_tasks = [summarize_content(article["content"], target_word_count_per_article, tone) for article in article_content_list]
+
     # Await all tasks in parallel
     texts_for_tts = await asyncio.gather(*summarization_tasks)
     logging.info(f"Amount of podcast scripts from llms: {len(texts_for_tts)}")
 
     # Process podcasts in parallel
-    podcast_clip_files = await process_podcasts(texts_for_tts)
+    podcast_clip_files = await process_podcasts(speech_client, texts_for_tts)
     logging.info(f"Amount of podcast clips created from articles: {len(podcast_clip_files)}")
 
     # Generate intro and combine clips
     # Note: Previously, the index was missing in this call. Adding index=0
-    intro_fn = await generate_podcast_clip(f"Hello! Its {datetime.now().strftime('%A, %B %d')}. You're listening to The Toast. Today we're covering: {', '.join([article['title'] for article in article_content_list])}.", -1)
-    # combined_podcast = AudioSegment.from_wav("podcast-intro.wav")
-    combined_podcast = generate_intro("podcast-intro.wav", intro_fn)
+    intro_clip = await generate_podcast_clip(speech_client, f"Hello! Its {datetime.now().strftime('%A, %B %d')}. You're listening to The Toast. Today we're covering: {', '.join([article['title'] for article in article_content_list])}.", -1)
+    combined_podcast = AudioSegment.from_wav("podcast-intro.wav")
+    combined_podcast += AudioSegment.from_wav(intro_clip) 
     transition_drum = AudioSegment.from_wav("drumbit.wav")
 
     # Sequentially combine all podcast clips
@@ -422,26 +390,21 @@ def handler(event=None, context=None):
 
     
     if content_format == "Podcast":
-        asyncio.run(generate_podcast(articles, target_word_count, user_id, s3_filename, tone))
-        logging.info(f"Podcast Generation Time: {time() - start_time}")
+        generate_podcast(articles, int(target_word_count), user_id, s3_filename, tone)
         return {
                 'statusCode': 200
             }
-
     elif content_format == "Healthcheck":
-        logging.info(f"Podcast Generation Time: {time() - start_time}")
         return {
             'statusCode': 200
         }
         
     else: 
-        logging.info(f"Podcast Generation Time: {time() - start_time}")
         return {
             'statusCode': 403,
             'errorMessage': "Not Valid Content Format.",
             's3Path':"None"
         }
-    
 
 
 if __name__ == "__main__":
@@ -466,7 +429,5 @@ if __name__ == "__main__":
     
     if content_format == "Podcast":
         asyncio.run(generate_podcast(articles, target_word_count, user_id, s3_filename, tone))
-    
-    logging.info(f"Podcast Generation Time: {time() - start_time}")
 
         

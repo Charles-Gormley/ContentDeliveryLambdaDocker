@@ -39,7 +39,7 @@ ENV AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 ENV AWS_DEFAULT_REGION=us-east-1
 ENV AWS_DEFAULT_OUTPUT=json
 
-RUN pip install numpy pandas tqdm joblib boto3 awscli google-cloud-texttospeech google-generativeai openai pydub replicate
+RUN pip install numpy pandas tqdm joblib boto3 awscli google-cloud-texttospeech google-generativeai openai pydub replicate aiohttp
 
 COPY src/* .
 CMD ["main.handler"]
