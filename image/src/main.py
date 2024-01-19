@@ -267,6 +267,8 @@ async def generate_podcast_clip(podcast_str, index):
     # Send the POST request asynchronously
     async with aiohttp.ClientSession() as session:
         async with session.post(tts_url, headers=headers, json=data) as response:
+            print(response.status)
+            print(response.text())
             if response.status == 200:
                 temp_filename = f'/tmp/podcast_clip_{index}.wav'
                 response_data = await response.json()
@@ -373,6 +375,7 @@ async def generate_podcast(articles: list, target_word_count_per_article: int, u
     # Note: Previously, the index was missing in this call. Adding index=0
     intro_fn = await generate_podcast_clip(f"Hello! Its {datetime.now().strftime('%A, %B %d')}. You're listening to The Toast. Today we're covering: {', '.join([article['title'] for article in article_content_list])}.", -1)
     # combined_podcast = AudioSegment.from_wav("podcast-intro.wav")
+    logging.info(f"Intro Filename: {intro_fn}")
     combined_podcast = generate_intro("podcast-intro.wav", intro_fn)
     transition_drum = AudioSegment.from_wav("drumbit.wav")
 

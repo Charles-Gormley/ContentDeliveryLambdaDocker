@@ -7,3 +7,6 @@ node_modules
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+
+/image/test_env_vars.py
+/image/deploy_to_aws.py

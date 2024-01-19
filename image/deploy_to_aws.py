@@ -1,10 +1,13 @@
 import os
 import logging
+from time import time
 
 # In image directory
 logging.basicConfig(level=logging.INFO,
                     format='[%(asctime)s] [%(processName)s] [%(levelname)s] - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S')
+
+start = time()
 
 # building image
 logging.info("Building Docker...")
@@ -23,4 +26,4 @@ logging.info("Finished CDK Bootstrap")
 
 logging.info("Starting CDK Deployment")
 os.system("cdk deploy")
-logging.info("Finished Deployment :)")
+logging.info(f"Finished Deployment :). Time to complete {str(time()-start)}")
